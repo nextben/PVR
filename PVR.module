@@ -1,0 +1,321 @@
+<?php
+
+// define('BASE_URL_PVR', 'http://localhost:8888');
+define('BASE_URL_PVR', 'http://192.168.1.111/pvr_editor');
+
+/**
+ * Implement hook_menu
+ */
+function PVR_menu(){
+	$items = array();
+	$items['admin/config/PVR'] = array(
+		'title' => 'Configure PVR',
+		'description' => t('Configuration of the PVR module'),
+		'access arguments' => array('Configure PVR'),
+		'type' => MENU_CALLBACK | MENU_NORMAL_ITEM,
+		'file' => 'PVR.admin.inc',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('PVR_configure_form')
+	);
+	$items['admin/config/PVR/login)'] = array(
+		'title' => 'Login informations',
+		'type' => MENU_DEFAULT_LOCAL_TASK,
+		'weight' => -10
+	);
+	$items['admin/config/PVR/projects'] = array(
+		'title' => 'Project list',
+		'type' => MENU_LOCAL_TASK,
+		'access arguments' => array('Configure PVR'),
+		'file' => 'PVR.admin.inc',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('PVR_project_list_form'),
+	);
+	$items['admin/config/PVR/project/%/edit'] = array(
+		'title callback' => 'PVR_edit_project_title',
+		'title arguments' => array(4),
+		'type' => MENU_CALLBACK,
+		'access arguments' => array('Configure PVR'),
+		'file' => 'PVR.admin.inc',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('PVR_project_edit_project_form', 4),
+	);
+
+	// TEST
+	$items['admin/config/PVR/project/%/edit2'] = array(
+		'title callback' => 'PVR_edit_project_title',
+		'title arguments' => array(4),
+		'type' => MENU_CALLBACK,
+		'access arguments' => array('Configure PVR'),
+		'file' => 'PVR.admin.inc',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('PVR_project_edit_project_form', 4),
+	);
+	$items['PVR/coment_posted'] = array(
+		'title callback' => 'PVR_edit_project_title',
+		'title arguments' => array(4),
+		'type' => MENU_CALLBACK,
+		'access arguments' => array('Configure PVR'),
+		'file' => 'PVR.admin.inc',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('PVR_project_edit_project_form', 4),
+	);
+	
+	$items['admin/config/PVR/project/%/delete'] = array(
+		'title' => t('Delete a project'),
+		'description' => t('Delete a project'),
+		'type' => MENU_CALLBACK,
+		'access arguments' => array('Configure PVR'),
+		'file' => 'PVR.admin.inc',
+		'page callback' => 'drupal_get_form',
+		'page arguments' => array('PVR_project_delete_project_form', 4),
+	);
+	
+	return $items;
+} 
+
+/**
+ * Implement hook_permission
+ */
+function PVR_permission() {
+	return array(
+		'Configure PVR' => array(
+			'title' => t('Configure PVR'),
+			'description' => t('Configure and edit PVR from the Drupal interface'),
+			'restrict access' => TRUE
+		)
+	);
+}
+
+/**
+ * Implemente hook_theme
+ */
+function PVR_theme() {
+  	return array(
+		'PVR_project_list_form' => array(
+	        'render element' => 'form',
+	  		'file' => 'PVR.admin.inc'
+    	),
+  	);
+}
+
+/**
+ * Title Callback admin/config/PVR/%/projects
+ * Formate page title
+ * 
+ * @param string $id
+ * 
+ * @return string
+ */
+function PVR_edit_project_title($id) {
+	//TODO get title from project ID
+	return t('Edit project'). ' "' . $id . '"';
+}
+
+
+//-----------------------------------------------------------------------------
+// PVR API USES
+//-----------------------------------------------------------------------------
+
+function PVR_check_login_password($login, $password){
+	$page_url = url(BASE_URL_PVR.'/api.php?req=checkLoginPassword&login='.$login.'&password='.$password);
+	$result = drupal_http_request($page_url);
+	if ($result->data == '1') {
+		return TRUE;
+	}
+	else {
+		return FALSE;
+	}
+}
+
+function PVR_get_projects_for_user(){
+	$user = variable_get('PVR_login', '');
+	if (!empty($user)){
+		$page_url = url(BASE_URL_PVR.'/api.php?req=getUserProjects&user='.$user);
+  		$result = drupal_http_request($page_url);
+
+  		$projects = drupal_json_decode($result->data);
+  		return $projects;
+	}
+	return NULL;
+}
+
+function PVR_get_iframe_project_edit($id){
+	$iframe = '<iframe src="'.BASE_URL_PVR.'/project_edit.php?project='.$id.'" width="100%" height="550px"></iframe>';
+	return $iframe;
+}
+
+function PVR_get_iframe_project_display($id){
+	$url = BASE_URL_PVR.'/project_display.php?project='.$id;
+	$iframe = '<iframe name="frame-comment" src="'.$url.'" width="912px" height="462px"></iframe>';
+	return $iframe;
+}
+
+function PVR_delte_project($id){
+	$page_url = url(BASE_URL_PVR.'/api.php?req=deleteProject&project='.$id);
+	$result = drupal_http_request($page_url);
+	if ($result->data == '1') {
+		return TRUE;
+	}
+	elseif (empty($result->data)) {
+		return FALSE;
+	}
+	else {
+		return $result->data;
+	}
+}
+
+//-----------------------------------------------------------------------------
+// PVR FIELD MANAGEMENT
+//-----------------------------------------------------------------------------
+
+
+/**
+ * Implements hook_field_info().
+ *
+ * Provides the description of the field.
+ */
+function PVR_field_info() {
+  return array(
+    // We name our field as the associative name of the array.
+    'PVR_display' => array(
+      'label' => t('PVR Project'),
+      'description' => t('Display a PVR'),
+      'default_widget' => 'options_select',
+      'default_formatter' => 'PVR_iframe',
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_validate().
+ *
+ * Possible error codes:
+ * - 'list_illegal_value': The value is not part of the list of allowed values.
+ */
+function PVR_field_validate($entity_type, $entity, $field, $instance, $langcode, $items, &$errors) {
+  // $allowed_values = list_allowed_values($field, $instance, $entity_type, $entity);
+  // foreach ($items as $delta => $item) {
+  //   if (!empty($item['value'])) {
+  //     if (!empty($allowed_values) && !isset($allowed_values[$item['value']])) {
+  //       $errors[$field['field_name']][$langcode][$delta][] = array(
+  //         'error' => 'list_illegal_value',
+  //         'message' => t('%name: illegal value.', array('%name' => $instance['label'])),
+  //       );
+  //     }
+  //   }
+  // }
+}
+
+/**
+ * Implements hook_field_is_empty().
+ */
+function PVR_field_is_empty($item, $field) {
+  if (empty($item['value']) && (string) $item['value'] !== '0') {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Implements hook_field_formatter_info().
+ *
+ * We need to tell Drupal that we have two different types of formatters
+ * for this field. One will change the text color, and the other will
+ * change the background color.
+ *
+ * @see field_example_field_formatter_view()
+ */
+function PVR_field_formatter_info() {
+  return array(
+    // This formatter just displays the hex value in the color indicated.
+    'PVR_iframe' => array(
+      'label' => t('Display the PVR in an iframe'),
+      'field types' => array('PVR_display'),
+    ),
+  );
+}
+
+/**
+ * Implements hook_field_formatter_view().
+ *
+ * @see field_example_field_formatter_info()
+ */
+function PVR_field_formatter_view($entity_type, $entity, $field, $instance, $langcode, $items, $display) {
+  $element = array();
+
+  switch ($display['type']) {
+    // This formatter simply outputs the field as text and with a color.
+    case 'PVR_iframe':
+      foreach ($items as $delta => $item) {
+        $iframe = PVR_get_iframe_project_display($item['value']);
+        // drupal_add_js(drupal_get_path('module', 'PVR') . '/scripts/PVR_iframe.js');
+        $element[$delta] = array(
+          // We create a render array to produce the desired markup,
+          // "<p style="color: #hexcolor">The color code ... #hexcolor</p>".
+          // See theme_html_tag().        	
+          '#type' => 'html_tag',
+          '#tag' => 'p',
+          '#value' => $iframe,
+        );
+      }
+      break;
+  }
+
+  return $element;
+}
+
+/**
+ * Implements hook_field_widget_info_alter().
+ *
+ * PVR module does not implement widgets of its own, but reuses the
+ * widgets defined in options.module.
+ *
+ * @see list_options_list()
+ */
+function PVR_field_widget_info_alter(&$info) {
+  $widgets = array(
+    'options_select' => array('PVR_display'),
+  );
+
+  foreach ($widgets as $widget => $field_types) {
+    $info[$widget]['field types'] = array_merge($info[$widget]['field types'], $field_types);
+  }
+}
+
+/**
+ * Implements hook_options_list().
+ */
+function PVR_options_list($field, $instance, $entity_type, $entity) {
+  $projects = PVR_get_projects_for_user();
+  
+  $projects_for_list = array();
+  foreach($projects as $key => $project){
+  	$projects_for_list[$project['project_id']] = $project['project_name'];
+  }
+  
+  return $projects_for_list;
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

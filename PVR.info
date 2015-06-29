@@ -1,0 +1,7 @@
+name = PVR
+description = Display, edit and upload Panosca.pe VR medias
+package = Nextaeon
+core = 7.x
+version = 7.x-1.0
+
+configure = admin/config/PVR
